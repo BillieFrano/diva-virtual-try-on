@@ -7,6 +7,7 @@ export interface ProcessingItem {
   status: "pending" | "processing" | "completed" | "error"
   result?: ProcessResult
   progress: number
+  costEstimate?: number
 }
 
 export interface BatchProgress {
@@ -14,6 +15,7 @@ export interface BatchProgress {
   completed: number
   failed: number
   current: number
+  totalCost: number
 }
 
 export function useImageProcessor(geminiService: GeminiService) {
@@ -24,6 +26,7 @@ export function useImageProcessor(geminiService: GeminiService) {
     completed: 0,
     failed: 0,
     current: 0,
+    totalCost: 0,
   })
   const [currentProcessingId, setCurrentProcessingId] = useState<string | null>(null)
   
@@ -31,15 +34,21 @@ export function useImageProcessor(geminiService: GeminiService) {
 
   const processBatch = useCallback(
     async (
-      modelImage: File,
+      modelImages: File[],  // Múltiples imágenes de referencia
       garmentFiles: File[],
       prompt: string,
       aspectRatio: string,
       resolution: string,
+      thinkingLevel: 'minimal' | 'low' | 'medium' | 'high' = 'medium',
+      mediaResolution: 'low' | 'medium' | 'high' | 'ultra' = 'high',
       onItemComplete?: (item: ProcessingItem) => void
     ) => {
       if (!geminiService.getApiKey()) {
-        throw new Error("API key no configurada. Por favor, configura tu API key de Gemini.")
+        throw new Error("API key no configurada. Por favor, configura tu API key de Gemini 3.")
+      }
+
+      if (modelImages.length === 0) {
+        throw new Error("Se requiere al menos una imagen de referencia del modelo.")
       }
 
       setIsProcessing(true)
@@ -48,6 +57,7 @@ export function useImageProcessor(geminiService: GeminiService) {
         completed: 0,
         failed: 0,
         current: 0,
+        totalCost: 0,
       })
 
       // Inicializar items
@@ -56,6 +66,7 @@ export function useImageProcessor(geminiService: GeminiService) {
         garmentFile: file,
         status: "pending",
         progress: 0,
+        costEstimate: geminiService.getCostPerImage(),
       }))
       setItems(initialItems)
 
@@ -63,6 +74,7 @@ export function useImageProcessor(geminiService: GeminiService) {
 
       let completed = 0
       let failed = 0
+      let accumulatedCost = 0
 
       for (let i = 0; i < garmentFiles.length; i++) {
         if (abortControllerRef.current.signal.aborted) {
@@ -87,8 +99,10 @@ export function useImageProcessor(geminiService: GeminiService) {
             prompt,
             aspectRatio,
             resolution,
-            modelImage,
+            modelImages,  // Array de múltiples referencias
             garmentImage: garmentFile,
+            thinkingLevel,
+            mediaResolution,
           }
 
           // Simular progreso durante el procesamiento
@@ -96,11 +110,11 @@ export function useImageProcessor(geminiService: GeminiService) {
             setItems((prev) =>
               prev.map((item) =>
                 item.id === itemId && item.status === "processing"
-                  ? { ...item, progress: Math.min(item.progress + 5, 90) }
+                  ? { ...item, progress: Math.min(item.progress + 3, 85) }
                   : item
               )
             )
-          }, 500)
+          }, 800)
 
           const result = await geminiService.processVirtualTryOn(options)
 
@@ -108,6 +122,7 @@ export function useImageProcessor(geminiService: GeminiService) {
 
           if (result.success) {
             completed++
+            accumulatedCost += result.costEstimate || 0
             const updatedItem: ProcessingItem = {
               ...initialItems[i],
               status: "completed",
@@ -135,6 +150,7 @@ export function useImageProcessor(geminiService: GeminiService) {
             ...prev,
             completed,
             failed,
+            totalCost: accumulatedCost,
           }))
         } catch (error) {
           failed++
@@ -157,9 +173,9 @@ export function useImageProcessor(geminiService: GeminiService) {
           }))
         }
 
-        // Pequeña pausa entre procesamientos para no sobrecargar la API
+        // Pausa entre procesamientos (Gemini 3 es más estable pero igual respetamos límites)
         if (i < garmentFiles.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 1000))
+          await new Promise((resolve) => setTimeout(resolve, 1500))
         }
       }
 
@@ -187,6 +203,7 @@ export function useImageProcessor(geminiService: GeminiService) {
       completed: 0,
       failed: 0,
       current: 0,
+      totalCost: 0,
     })
     setIsProcessing(false)
     setCurrentProcessingId(null)
@@ -195,10 +212,12 @@ export function useImageProcessor(geminiService: GeminiService) {
   const retryItem = useCallback(
     async (
       itemId: string,
-      modelImage: File,
+      modelImages: File[],
       prompt: string,
       aspectRatio: string,
-      resolution: string
+      resolution: string,
+      thinkingLevel: 'minimal' | 'low' | 'medium' | 'high' = 'medium',
+      mediaResolution: 'low' | 'medium' | 'high' | 'ultra' = 'high',
     ) => {
       const item = items.find((i) => i.id === itemId)
       if (!item) return
@@ -212,8 +231,10 @@ export function useImageProcessor(geminiService: GeminiService) {
           prompt,
           aspectRatio,
           resolution,
-          modelImage,
+          modelImages,
           garmentImage: item.garmentFile,
+          thinkingLevel,
+          mediaResolution,
         }
 
         const result = await geminiService.processVirtualTryOn(options)
@@ -224,7 +245,11 @@ export function useImageProcessor(geminiService: GeminiService) {
               i.id === itemId ? { ...i, status: "completed", result, progress: 100 } : i
             )
           )
-          setBatchProgress((prev) => ({ ...prev, completed: prev.completed + 1 }))
+          setBatchProgress((prev) => ({ 
+            ...prev, 
+            completed: prev.completed + 1,
+            totalCost: prev.totalCost + (result.costEstimate || 0)
+          }))
         } else {
           throw new Error(result.error || "Error en el procesamiento")
         }
@@ -258,5 +283,7 @@ export function useImageProcessor(geminiService: GeminiService) {
     cancelProcessing,
     reset,
     retryItem,
+    costPerImage: geminiService.getCostPerImage(),
+    modelName: geminiService.getModelName(),
   }
 }

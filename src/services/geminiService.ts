@@ -4,8 +4,10 @@ export interface ProcessingOptions {
   prompt: string
   aspectRatio: string
   resolution: string
-  modelImage: File
+  modelImages: File[]  // Múltiples imágenes de referencia del modelo
   garmentImage: File
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high'
+  mediaResolution?: 'low' | 'medium' | 'high' | 'ultra'
 }
 
 export interface ProcessResult {
@@ -13,11 +15,14 @@ export interface ProcessResult {
   imageUrl?: string
   error?: string
   processingTime?: number
+  costEstimate?: number  // Costo estimado en USD
 }
 
 export class GeminiService {
   private apiKey: string
   private baseUrl = "https://generativelanguage.googleapis.com/v1beta/models"
+  private modelName = "gemini-3-pro-image-preview"
+  private costPerImage = 0.134  // USD por imagen generada
 
   constructor(apiKey: string) {
     this.apiKey = apiKey
@@ -31,6 +36,14 @@ export class GeminiService {
     return this.apiKey
   }
 
+  getModelName(): string {
+    return this.modelName
+  }
+
+  getCostPerImage(): number {
+    return this.costPerImage
+  }
+
   async processVirtualTryOn(options: ProcessingOptions): Promise<ProcessResult> {
     const startTime = Date.now()
 
@@ -41,54 +54,64 @@ export class GeminiService {
 
       const dimensions = getAspectRatioDimensions(options.aspectRatio, options.resolution)
       
-      // Convertir imágenes a base64
-      const modelBase64 = await this.fileToBase64(options.modelImage)
+      // Convertir todas las imágenes de referencia del modelo
+      const modelBase64Promises = options.modelImages.map(img => this.fileToBase64(img))
+      const modelBase64Array = await Promise.all(modelBase64Promises)
       const garmentBase64 = await this.fileToBase64(options.garmentImage)
 
-      // Construir el prompt enriquecido
+      // Construir el prompt enriquecido para Gemini 3
       const enhancedPrompt = `${options.prompt}
 
-Instrucciones adicionales:
-- Mantén la pose, iluminación y estilo del modelo de referencia
-- La prenda debe ajustarse naturalmente al cuerpo del modelo
+INSTRUCCIONES CRÍTICAS - MANTENER IDENTIDAD:
+- Usa las ${options.modelImages.length} imágenes de referencia como GUÍA ABSOLUTA de la identidad del modelo
+- Mantén EXACTAMENTE: rasgos faciales, tono de piel, color y tipo de cabello, expresión
+- La prenda debe ajustarse fotorealista al cuerpo, respetando pliegues y caída natural
 - Resolución objetivo: ${options.resolution} (${dimensions.width}x${dimensions.height})
 - Aspect ratio: ${options.aspectRatio}
-- Estilo fotorealista, alta calidad, iluminación profesional
-- No modifiques el rostro ni las características del modelo`
+- Calidad profesional de estudio de moda de alta gama
+- NO inventes características que no están en las referencias`
+
+      // Construir parts dinámicamente con múltiples referencias
+      const parts: any[] = [
+        { text: enhancedPrompt },
+        // Agregar todas las imágenes de referencia del modelo
+        ...modelBase64Array.map((base64, index) => ({
+          inline_data: {
+            mime_type: options.modelImages[index].type,
+            data: base64,
+          },
+        })),
+        // Agregar la prenda al final
+        {
+          inline_data: {
+            mime_type: options.garmentImage.type,
+            data: garmentBase64,
+          },
+        },
+      ]
 
       const requestBody = {
         contents: [
           {
             role: "user",
-            parts: [
-              {
-                text: enhancedPrompt,
-              },
-              {
-                inline_data: {
-                  mime_type: options.modelImage.type,
-                  data: modelBase64,
-                },
-              },
-              {
-                inline_data: {
-                  mime_type: options.garmentImage.type,
-                  data: garmentBase64,
-                },
-              },
-            ],
+            parts: parts,
           },
         ],
         generation_config: {
-          temperature: 0.4,
-          top_p: 0.8,
+          temperature: 0.3,  // Más bajo para más consistencia
+          top_p: 0.9,
           top_k: 40,
-          max_output_tokens: 4096,
+          max_output_tokens: 8192,  // Gemini 3 soporta más
         },
+        // Configuraciones específicas de Gemini 3
+        thinking_config: {
+          thinking_level: options.thinkingLevel || 'medium',  // medium para balance calidad/velocidad
+        },
+        media_resolution: options.mediaResolution || 'high',  // alta calidad de análisis de imágenes
       }
 
       const response = await fetch(
-        `${this.baseUrl}/gemini-2.0-flash-exp-image-generation:generateContent?key=${this.apiKey}`,
+        `${this.baseUrl}/${this.modelName}:generateContent?key=${this.apiKey}`,
         {
           method: "POST",
           headers: {
@@ -100,6 +123,7 @@ Instrucciones adicionales:
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        console.error("Gemini 3 API Error:", errorData)
         throw new Error(
           errorData.error?.message || `Error ${response.status}: ${response.statusText}`
         )
@@ -107,19 +131,21 @@ Instrucciones adicionales:
 
       const data = await response.json()
 
-      // Extraer la imagen generada de la respuesta
+      // Extraer la imagen generada de la respuesta de Gemini 3
       const generatedImage = this.extractImageFromResponse(data)
 
       if (!generatedImage) {
-        throw new Error("No se pudo generar la imagen")
+        throw new Error("No se pudo generar la imagen - respuesta vacía de Gemini 3")
       }
 
       return {
         success: true,
         imageUrl: generatedImage,
         processingTime: Date.now() - startTime,
+        costEstimate: this.costPerImage,
       }
     } catch (error) {
+      console.error("Error en procesamiento Gemini 3:", error)
       return {
         success: false,
         error: error instanceof Error ? error.message : "Error desconocido",
@@ -163,13 +189,14 @@ Instrucciones adicionales:
     }
   }
 
-  // Método para validar la API key
+  // Método para validar la API key con Gemini 3
   async validateApiKey(): Promise<boolean> {
     try {
       if (!this.apiKey) return false
 
+      // Hacemos una petición simple de validación
       const response = await fetch(
-        `${this.baseUrl}/gemini-2.0-flash-exp-image-generation?key=${this.apiKey}`,
+        `${this.baseUrl}/${this.modelName}?key=${this.apiKey}`,
         {
           method: "GET",
         }
