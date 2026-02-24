@@ -1,0 +1,197 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 7%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 340 82% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
+    --accent: 340 82% 52%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 20%;
+    --input: 0 0% 15%;
+    --ring: 340 82% 52%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-diva-dark text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e91e63;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ff4081;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #e91e63 0%, #ff4081 50%, #ff80ab 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Gradient button */
+.gradient-btn {
+  background: linear-gradient(135deg, #e91e63 0%, #ff4081 50%, #c2185b 100%);
+  background-size: 200% 200%;
+  transition: all 0.3s ease;
+}
+
+.gradient-btn:hover {
+  background-position: right center;
+  box-shadow: 0 4px 20px rgba(233, 30, 99, 0.4);
+}
+
+/* Card glow effect */
+.card-glow {
+  box-shadow: 0 0 0 1px rgba(233, 30, 99, 0.1), 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.card-glow:hover {
+  box-shadow: 0 0 0 1px rgba(233, 30, 99, 0.3), 0 8px 40px rgba(233, 30, 99, 0.15);
+}
+
+/* Dropzone styles */
+.dropzone {
+  border: 2px dashed rgba(233, 30, 99, 0.3);
+  background: rgba(233, 30, 99, 0.02);
+  transition: all 0.3s ease;
+}
+
+.dropzone:hover,
+.dropzone.active {
+  border-color: #e91e63;
+  background: rgba(233, 30, 99, 0.08);
+}
+
+/* Progress bar gradient */
+.progress-gradient {
+  background: linear-gradient(90deg, #e91e63 0%, #ff4081 100%);
+}
+
+/* Shimmer animation for loading */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(233, 30, 99, 0.1) 0%,
+    rgba(233, 30, 99, 0.2) 50%,
+    rgba(233, 30, 99, 0.1) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Image hover overlay */
+.image-overlay {
+  opacity: 0;
+  transition: all 0.3s ease;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
+}
+
+.image-container:hover .image-overlay {
+  opacity: 1;
+}
+
+/* Custom input focus */
+input:focus,
+textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.3);
+}
+
+/* Toast customization */
+[data-sonner-toast] {
+  --normal-bg: #1e1e1e !important;
+  --normal-border: #e91e63 !important;
+  --normal-text: #ffffff !important;
+}
+
+/* Debug panel animation */
+.debug-panel {
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+}
+
+.debug-panel.open {
+  transform: translateX(0);
+}
+
+/* Aspect ratio preview */
+.aspect-preview-16-9 {
+  aspect-ratio: 16 / 9;
+}
+
+.aspect-preview-1-1 {
+  aspect-ratio: 1 / 1;
+}
+
+.aspect-preview-4-3 {
+  aspect-ratio: 4 / 3;
+}
+
+.aspect-preview-9-16 {
+  aspect-ratio: 9 / 16;
+}
+
+.aspect-preview-3-4 {
+  aspect-ratio: 3 / 4;
+}
+
+/* Badge styles */
+.badge-pink {
+  background: rgba(233, 30, 99, 0.15);
+  color: #ff4081;
+  border: 1px solid rgba(233, 30, 99, 0.3);
+}
+
+/* Grid pattern background */
+.grid-pattern {
+  background-image: 
+    linear-gradient(rgba(233, 30, 99, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(233, 30, 99, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
